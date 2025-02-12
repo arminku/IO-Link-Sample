@@ -1,13 +1,113 @@
-<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1">
-  <POU Name="MAIN" Id="{b4658dfa-e05b-4748-8c25-a63478c1043e}">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="MAIN" Id="{b4658dfa-e05b-4748-8c25-a63478c1043e}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
+	fbIolSlave 				: FB_IolSlave;
+	State					: (Idle, Write, Read, Check);
+	bInitDone				: BOOL := FALSE;
+	hr						: HRESULT;
+	nIndex					: WORD:= 16#0800;	//Select Index of IO-Link Device to Write
+	nSubIndex				: BYTE:= 16#01;		//Select Sub-Index of IO-Link Device to Write
+	nSetValue				: USINT:=3;			//Select Value of Parameter which gets wrte
+	nValueRead				: USINT;
+	bExecute				: BOOL;
+	
+	bBusy					: BOOL := FALSE;
+	bDone					: BOOL := FALSE;
+	bError					: BOOL := FALSE;
+	nAdsError				: E_AdsErr := E_AdsErr.NOERR;
+	nIolError				: E_IolError := E_IolError.NoError;
+	sErrorTxt				: STRING(255) := '';
+
 END_VAR
-]]>
-    </Declaration>
+]]></Declaration>
     <Implementation>
-      <ST><![CDATA[]]></ST>
+      <ST><![CDATA[////
+// Init
+//
+IF NOT bInitDone THEN
+	fbIolSlave.MasterAoeNetId := F_CreateAmsNetId(GVL_IO.IoLink_AoeNetId);
+	fbIolSlave.Port := E_IolPort.Port1;
+	fbIolSlave.Name := 'EPI2338';
+	bInitDone := TRUE;
+END_IF
+
+CASE State OF
+	Idle:
+		IF bExecute THEN
+			State:=Write;
+			bExecute:=FALSE;
+		END_IF
+	
+	Write:
+		hr := fbIolSlave.Write_UINT8(nIndex, nSubindex, nSetValue); // select Method dependend on Variable type of IO-Link Device 
+		IF NOT F_IolIsBusy(hr) THEN
+			IF FAILED(hr) THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				sErrorTxt := fbIolSlave.ErrorTxt;
+				nAdsError := F_IolGetAdsError(hr);
+				nIolError := F_IolGetIolError(hr);
+				State := Idle; 
+			ELSE
+				State := Read; 
+			END_IF
+		END_IF
+		
+	Read:
+		hr := fbIolSlave.Read_UINT8(nIndex, nSubindex, nValueRead);// select Method dependend on Variable type of IO-Link Device 
+		IF NOT F_IolIsBusy(hr) THEN
+			IF FAILED(hr) THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				sErrorTxt := fbIolSlave.ErrorTxt;
+				nAdsError := F_IolGetAdsError(hr);
+				nIolError := F_IolGetIolError(hr);
+				State := Idle;
+			ELSE
+				State := Check;
+			END_IF
+		END_IF
+		
+	Check:
+		IF nSetValue <> nValueRead THEN
+			bBusy := FALSE;
+			bError := TRUE;
+			sErrorTxt := 'nSetValue and nValueRead are not equal!';
+		ELSE
+			bBusy := FALSE;
+			bDone := TRUE;
+			State := Idle;
+		END_IF
+	
+END_CASE]]></ST>
     </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="16" Count="3" />
+      <LineId Id="21" Count="3" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="52" Count="1" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="35" Count="9" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="69" Count="11" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="82" Count="7" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="28" Count="0" />
+    </LineIds>
   </POU>
 </TcPlcObject>
